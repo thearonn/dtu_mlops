@@ -92,7 +92,4 @@ def view_classify(img, ps, version="MNIST"):
     ax2.set_xlim(0, 1.1)
 
     plt.tight_layout()
-<<<<<<< HEAD
     plt.show()
-=======
->>>>>>> 8a26211319ac593118eb375bb860c27b2b005f41
