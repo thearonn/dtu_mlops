@@ -14,14 +14,14 @@ from torch.utils.data import DataLoader
 
 # Model Hyperparameters
 dataset_path = '~/datasets'
-cuda = True
+cuda = False
 DEVICE = torch.device("cuda" if cuda else "cpu")
 batch_size = 100
 x_dim  = 784
 hidden_dim = 400
 latent_dim = 20
 lr = 1e-3
-epochs = 20
+epochs = 10
 
 
 # Data loading
@@ -39,7 +39,7 @@ class Encoder(nn.Module):
         
         self.FC_input = nn.Linear(input_dim, hidden_dim)
         self.FC_mean  = nn.Linear(hidden_dim, latent_dim)
-        self.FC_var   = nn.Linear (hidden_dim, latent_dim)
+        self.FC_var   = nn.Linear(hidden_dim, latent_dim)
         self.training = True
         
     def forward(self, x):
@@ -62,7 +62,7 @@ class Decoder(nn.Module):
     def __init__(self, latent_dim, hidden_dim, output_dim):
         super(Decoder, self).__init__()
         self.FC_hidden = nn.Linear(latent_dim, hidden_dim)
-        self.FC_output = nn.Linear(latent_dim, output_dim)
+        self.FC_output = nn.Linear(hidden_dim, output_dim) # Change latent tp hidden
         
     def forward(self, x):
         h     = torch.relu(self.FC_hidden(x))
@@ -89,13 +89,23 @@ model = Model(Encoder=encoder, Decoder=decoder).to(DEVICE)
 
 from torch.optim import Adam
 
-BCE_loss = nn.BCELoss()
+BCE_loss = nn.BCELoss(reduction = 'sum')
+
+KLDdiv = nn.KLDivLoss(reduction = 'sum')
 
 def loss_function(x, x_hat, mean, log_var):
     reproduction_loss = nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
     KLD      = - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
 
     return reproduction_loss + KLD
+
+def loss2(x_hat, x):
+    rep_loss = BCE_loss(x_hat, x)
+    KLD = KLDdiv(x_hat, x)
+    
+    return rep_loss + KLD
+
+
 
 optimizer = Adam(model.parameters(), lr=lr)
 
@@ -107,10 +117,13 @@ for epoch in range(epochs):
     for batch_idx, (x, _) in enumerate(train_loader):
         x = x.view(batch_size, x_dim)
         x = x.to(DEVICE)
+        optimizer.zero_grad()
 
         x_hat, mean, log_var = model(x)
-        loss = loss_function(x, x_hat, mean, log_var)
-        
+        #loss = loss_function(x, x_hat, mean, log_var)
+        #loss = BCE_loss(x_hat, x)
+        #loss = KDLdiv(x, x_hat)
+        loss = loss2(x_hat, x)
         overall_loss += loss.item()
         
         loss.backward()
