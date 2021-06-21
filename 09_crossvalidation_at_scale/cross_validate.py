@@ -6,7 +6,7 @@ from sklearn.metrics import accuracy_score
 import numpy as np
 
 np.random.seed(123)
-OPTUNA = False
+OPTUNA = True
 
 data = datasets.load_digits()
 X,y = data['data'], data['target']
@@ -61,12 +61,54 @@ else:
     import optuna
     
     def objective(trial):
-        # fill in this. Given a trial it should
         # 1. suggest a set of hyperparameters (HINT: use trial.suggest_discrete_uniform )
+        params = []
+        kf = KFold(n_splits=5)
+        estimators = int(trial.suggest_discrete_uniform("estimators", 1, 200, 1))
+        depth = int(trial.suggest_discrete_uniform("depth", 1, 100, 1))
+
+        #params = ParameterGrid({'estimators': estimators, 'depth': depth})
+        params.append([estimators, depth])
+        # print("------------------", param,"------------")
+        scores = []
+        c = RandomForestClassifier(n_estimators = estimators, max_depth = depth)
+        
         # 2. train a random forest using the hyperparameters
+        scores.append([])
+        for train_index, val_index in kf.split(X_train):
+            x_t, x_v = X_train[train_index], X_train[val_index]
+            y_t, y_v = y_train[train_index], y_train[val_index]
+        
+            c.fit(x_t, y_t)
+            
+            preds = c.predict(x_v)
+        
+            acc = accuracy_score(y_v, preds)
+        
+            scores[-1].append(acc)
+        
+        scores_mean = [np.mean(s) for s in scores]
+        # scores_std = [np.std(s) for s in scores]
+        
+        
         # 3. evaluate the trained random forest
-        return val_acc
-    
+        idx = np.argmax(scores_mean)
+        print(f"Best parameter combination: {params[idx]}")
+        classifier = RandomForestClassifier(params[idx][0])
+        classifier.fit(X_train, y_train)
+        
+        preds = classifier.predict(X_test)
+        final_acc = accuracy_score(y_test, preds)
+        print(f'Final score to report: {final_acc}')
+              
+        return final_acc
+    #objective(5)
     # call the optimizer
-    study = optuna.create_study()
-    study.optimize(objective, n_trials=100) 
+    est_seq = range(1,200,10)
+    dep_seq = range(1,100,10)
+    search_space = {"estimators": est_seq, "depth": dep_seq}
+
+    study = optuna.create_study(sampler=optuna.samplers.GridSampler(search_space), direction = "maximize")
+
+    #study = optuna.create_study(direction="maximize")
+    study.optimize(objective) 
