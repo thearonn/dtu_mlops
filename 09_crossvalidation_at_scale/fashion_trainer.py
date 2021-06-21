@@ -3,6 +3,7 @@ Credit to: https://www.kaggle.com/pankajj/fashion-mnist-with-pytorch-93-accuracy
 """
 import torch
 import torch.nn as nn
+import optuna
 
 from torchvision.datasets import FashionMNIST
 import torchvision.transforms as transforms
@@ -61,19 +62,28 @@ class FashionCNN(nn.Module):
         
         return out
 
-def train_and_test():
+def train_and_test(trial):
     train_set = FashionMNIST('', train=True, download=True, transform=transforms.Compose([transforms.ToTensor()]))
-    train_set = FashionMNIST('', train=False, download=True, transform=transforms.Compose([transforms.ToTensor()]))
+    test_set = FashionMNIST('', train=False, download=True, transform=transforms.Compose([transforms.ToTensor()]))
 
-    train_loader = DataLoader(train_set, batch_size=100)
-    test_loader = DataLoader(train_set, batch_size=100)
+    params = []
+    lr = trial.suggest_loguniform("lr", 1e-6, 1e0)
+    batch = int(trial.suggest_discrete_uniform("batch", 10, 50, 10))
+    #normal = trial.suggest_categorical("normal", {True, False})
+    #active = trial.suggest_categorical("active", {nn.ReLU, nn.Tanh, nn.RReLU, nn.LeakyReLU, nn.ELU})
+
+    params.append([lr, batch])
+
+
+    train_loader = DataLoader(train_set, batch_size=batch)
+    test_loader = DataLoader(test_set, batch_size=batch)
     
     model = FashionCNN()
     model.to(device)
     
     error = nn.CrossEntropyLoss()
     
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     print(model)
     
     num_epochs = 10
@@ -85,7 +95,8 @@ def train_and_test():
     # Lists for knowing classwise accuracy
     predictions_list = []
     labels_list = []
-    
+
+
     for epoch in range(num_epochs):
         for batch_idx, (images, labels) in enumerate(train_loader):
             # Transfering images and labels to GPU if available
@@ -147,6 +158,10 @@ def train_and_test():
             
     for i in range(10):
         print("Accuracy of {}: {:.2f}%".format(output_label(i), class_correct[i] * 100 / total_correct[i]))
-        
-if __name__ == "__main__":
-    train_and_test()
+
+#search_space = {"lr": lr, "batch": batch}
+study = optuna.create_study(direction="maximize")
+study.optimize(train_and_test, n_trials = 10) 
+
+#if __name__ == "__main__":
+#    train_and_test()
